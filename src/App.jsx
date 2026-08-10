@@ -173,47 +173,49 @@ export default function App(){
   },[scores,maxAxis]);
   const radarPath = radar.pts.map((p,i)=>`${i?"L":"M"}${p.x},${p.y}`).join(" ")+" Z";
 
-  /* ── 이미지 저장 (SVG→PNG via canvas, 라이브러리 없이) ── */
+  const [saving,setSaving]=useState(false);
+
+  /* html2canvas를 CDN에서 1회 로드 */
+  const loadH2C = ()=> new Promise((resolve,reject)=>{
+    if(window.html2canvas) return resolve(window.html2canvas);
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    s.onload=()=>resolve(window.html2canvas);
+    s.onerror=()=>reject(new Error("cdn"));
+    document.head.appendChild(s);
+  });
+
+  /* ── 이미지 저장 : 결과 카드를 화면 그대로 캡처 ── */
   const saveImage = async ()=>{
-    const el = resultRef.current; if(!el) return;
-    // 간단히 화면 캡처 대신, 결과 요약을 canvas로 그려 PNG 저장
-    const c=document.createElement("canvas"); const W=1000,H=1400; c.width=W;c.height=H;
-    const x=c.getContext("2d");
-    x.fillStyle="#fff"; x.fillRect(0,0,W,H);
-    x.fillStyle=NAVY; x.font="bold 46px Pretendard,sans-serif";
-    x.fillText("CREATIVE MIND MAP", 60, 90);
-    x.fillStyle=CORAL; x.font="bold 26px Pretendard,sans-serif";
-    x.fillText("나의 성향 밸런스 진단 결과", 60, 130);
-    x.fillStyle=INK; x.font="bold 30px Pretendard,sans-serif";
-    x.fillText(`${profile.name||"학생"} 님`, 60, 200);
-    // 그룹 바
-    let gy=260;
-    groupScores.forEach(g=>{
-      x.fillStyle=g.color; x.font="bold 24px Pretendard,sans-serif";
-      x.fillText(`${g.key}  ${g.pct}%`, 60, gy);
-      x.fillStyle=SOFT; x.fillRect(300,gy-22,600,26);
-      x.fillStyle=g.color; x.fillRect(300,gy-22,600*g.pct/100,26);
-      gy+=54;
-    });
-    // 프로필 문장
-    x.fillStyle=INK; x.font="22px Pretendard,sans-serif";
-    const lines=[
-      `주된 성향 : ${topGroup||"-"}`,
-      `관심 조형 : ${topTrack||"-"}`,
-      `끌리는 주제 : ${topThemes.slice(0,2).join(", ")||"-"}`,
-      `창작의 연료 : ${topDopa||"-"}`,
-    ];
-    let ly=gy+40; lines.forEach(t=>{ x.fillText(t,60,ly); ly+=44; });
-    // 추천
-    x.fillStyle=NAVY; x.font="bold 26px Pretendard,sans-serif";
-    x.fillText("추천 프로그램", 60, ly+30); ly+=70;
-    x.font="22px Pretendard,sans-serif"; x.fillStyle=INK;
-    recs.forEach(r=>{ x.fillText("· "+r.t,60,ly); ly+=40; });
-    x.fillStyle=NAVY; x.font="bold 20px Pretendard,sans-serif";
-    x.fillText("ESAD GLOBAL ART INSTITUTE · 기획 → 표현 → 사회", 60, H-50);
-    const url=c.toDataURL("image/png");
-    const a=document.createElement("a"); a.href=url;
-    a.download=`ESAD_진단결과_${profile.name||"학생"}.png`; a.click();
+    const el = resultRef.current; if(!el || saving) return;
+    setSaving(true);
+    try{
+      // 폰트가 다 뜬 뒤 캡처 (글자 깨짐 방지)
+      if(document.fonts && document.fonts.ready) { try{ await document.fonts.ready; }catch(e){} }
+      const html2canvas = await loadH2C();
+      const canvas = await html2canvas(el,{
+        backgroundColor:"#ffffff", scale:2, useCORS:true, logging:false,
+        windowWidth:el.scrollWidth, windowHeight:el.scrollHeight,
+      });
+      const finish = (blob)=>{
+        if(!blob){ // 최후 폴백: dataURL 방식
+          const url=canvas.toDataURL("image/png");
+          const a=document.createElement("a"); a.href=url;
+          a.download=`ESAD_진단결과_${profile.name||"학생"}.png`; a.click();
+          return;
+        }
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a"); a.href=url;
+        a.download=`ESAD_진단결과_${profile.name||"학생"}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1500);
+      };
+      if(canvas.toBlob) canvas.toBlob(finish,"image/png"); else finish(null);
+    }catch(err){
+      alert("이미지 저장이 어려운 환경이에요. 화면을 캡처(스크린샷)해서 저장해 주세요.");
+    }finally{
+      setSaving(false);
+    }
   };
 
   const T = ["시작","좋아하는 것","상황 반응","밸런스","조형 트랙","세부 과정","주제·컨셉","만족 유형","결과"];
@@ -254,7 +256,7 @@ export default function App(){
         {step===7 && <StepDopa dopa={dopa} setDopa={setDopa} />}
         {step===8 &&
           <StepResult ref={resultRef} {...{profile,groupScores,radar,radarPath,scores,maxAxis,
-            topGroup,topTrack,topThemes,topDopa,recs,saveImage}} />}
+            topGroup,topTrack,topThemes,topDopa,recs,saveImage,saving}} />}
 
         {/* 네비 */}
         {step>0 &&
@@ -283,9 +285,9 @@ export default function App(){
 }
 
 /* ══════════ 화면들 ══════════ */
-function Card({children,style}){
-  return <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",boxShadow:"0 6px 24px rgba(48,55,99,.07)",...style}}>{children}</div>;
-}
+const Card = React.forwardRef(function Card({children,style},ref){
+  return <div ref={ref} style={{background:"#fff",borderRadius:20,padding:"26px 24px",boxShadow:"0 6px 24px rgba(48,55,99,.07)",...style}}>{children}</div>;
+});
 function Head({n,title,desc}){
   return <div style={{marginBottom:18}}>
     <div style={{display:"flex",alignItems:"baseline",gap:8}}>
@@ -513,7 +515,7 @@ function StepDopa({dopa,setDopa}){
 }
 
 const StepResult = React.forwardRef(function StepResult(
-  {profile,groupScores,radar,radarPath,scores,maxAxis,topGroup,topTrack,topThemes,topDopa,recs,saveImage},ref){
+  {profile,groupScores,radar,radarPath,scores,maxAxis,topGroup,topTrack,topThemes,topDopa,recs,saveImage,saving},ref){
   return <div>
     <Card ref={ref}>
       <div style={{textAlign:"center",marginBottom:18}}>
@@ -561,9 +563,10 @@ const StepResult = React.forwardRef(function StepResult(
     </Card>
 
     <div style={{display:"flex",gap:10,marginTop:16,flexWrap:"wrap"}}>
-      <button className="btn" onClick={saveImage}
-        style={{flex:1,minWidth:160,background:GOLD,color:"#fff",padding:"14px",fontSize:14}}>
-        결과 이미지 저장
+      <button className="btn" onClick={saveImage} disabled={saving}
+        style={{flex:1,minWidth:160,background:saving?"#c9b98a":GOLD,color:"#fff",padding:"14px",fontSize:14,
+          cursor:saving?"default":"pointer"}}>
+        {saving?"저장 중…":"결과 이미지 저장"}
       </button>
       <button className="btn" onClick={()=>{
           const url=window.location.href;

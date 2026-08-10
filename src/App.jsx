@@ -91,32 +91,42 @@ const DOPA = [
   { key:"연결", color:"#7F9BD6", q:"내 작품이 누군가에게 가닿을 때 의미를 느낀다" },
 ];
 
-/* ESAD 프로그램 추천 규칙 (그룹/트랙/도파민 조합) */
-function recommendPrograms({ topGroup, topTrack, topDopa, topThemes }) {
-  const recs = [];
-  if (topGroup === "예체능") {
-    recs.push({ t:"ESAD 파운데이션 드로잉", d:"형태·명암 기초부터 감각 훈련까지, 모든 미술의 뿌리를 다지는 과정" });
-    if (topTrack === "디자인·공예")
-      recs.push({ t:"디자인·기획 스튜디오", d:"그래픽·브랜딩·UXUI로 아이디어를 시각화하는 실전 프로젝트" });
-    if (topTrack === "애니·웹툰")
-      recs.push({ t:"스토리·웹툰 크리에이터", d:"캐릭터·콘티·연출로 자기 세계관을 만드는 8주 창작 과정" });
-    if (topTrack === "만들기")
-      recs.push({ t:"입체·공간 조형 워크숍", d:"조소·설치로 손과 공간 감각을 키우는 핸즈온 클래스" });
-  }
-  if (topGroup === "인문" || topThemes.includes("사회·메시지") || topThemes.includes("인간·감정"))
-    recs.push({ t:"컨셉·기획 라이팅", d:"작품에 담을 메시지와 서사를 글로 설계하는 아이데이션 훈련" });
-  if (topGroup === "이공계" || topThemes.includes("기술·미래"))
-    recs.push({ t:"건축·공간 디자인 트랙", d:"논리와 조형을 잇는 설계 사고, 국내외 건축 진학 대비" });
-  if (topDopa === "인정" || topDopa === "연결")
-    recs.push({ t:"포트폴리오·전시 프로젝트", d:"성산아트홀 전시로 이어지는 작품 완성·발표 과정" });
-  if (topDopa === "탐구" || topDopa === "몰입")
-    recs.push({ t:"실험·믹스드미디어 클래스", d:"새 재료·기법을 탐색하며 몰입의 즐거움을 키우는 과정" });
-  // ESAD 시그니처: 유학
-  recs.push({ t:"일본·미국 미대 유학 컨설팅", d:"기획→표현→사회 로드맵으로 진학 목표를 설계하는 1:1 상담" });
-  // 중복 제거, 최대 4개
-  const seen = new Set(); const out = [];
-  for (const r of recs){ if(!seen.has(r.t)){ seen.add(r.t); out.push(r);} if(out.length>=4) break; }
-  return out;
+/* ESAD 프로그램 카탈로그 (11개 트랙) — 성향·주제·만족유형에 가중치 매핑 */
+const PROGRAMS = [
+  { t:"컨셉·기획 라이팅", d:"작품에 담을 메시지와 서사를 글로 설계하는 아이데이션 훈련",
+    when:({topGroup,topThemes})=> (topGroup==="인문"?2:0)+(topThemes.includes("사회·메시지")?2:0)+(topThemes.includes("인간·감정")?1:0) },
+  { t:"실험·믹스드미디어 클래스", d:"새 재료·기법을 탐색하며 몰입의 즐거움을 키우는 과정",
+    when:({topDopa})=> (topDopa==="탐구"?2:0)+(topDopa==="몰입"?2:0) },
+  { t:"국제사회·비즈니스 트랙", d:"디자인·브랜드를 사회와 시장으로 연결하는 기획·경영형 진로 설계",
+    when:({topGroup,topThemes})=> (topGroup==="인문"?2:0)+(topThemes.includes("사회·메시지")?2:0)+(topThemes.includes("기술·미래")?1:0) },
+  { t:"건축·공간 디자인 트랙", d:"논리와 조형을 잇는 설계 사고, 국내외 건축 진학 대비",
+    when:({topGroup,topTrack,topThemes})=> (topGroup==="이공계"?2:0)+(topTrack==="디자인·공예"?1:0)+(topThemes.includes("기술·미래")?1:0) },
+  { t:"스토리 아이데이션 트랙", d:"캐릭터·콘티·세계관으로 이야기를 만드는 창작 과정 (웹툰·애니)",
+    when:({topTrack,topThemes})=> (topTrack==="애니·웹툰"?3:0)+(topThemes.includes("판타지·상상")?2:0) },
+  { t:"파인아트·학예사 트랙", d:"순수미술 작업과 전시·큐레이션으로 이어지는 예술 진로",
+    when:({topGroup,topTrack,topThemes,topDopa})=> (topTrack==="페인팅"?2:0)+(topTrack==="만들기"?2:0)+(topThemes.includes("아름다움·감각")?2:0)+(topDopa==="표현"?1:0) },
+  { t:"아트 디렉팅 트랙", d:"비주얼 방향을 총괄하는 디렉터형 감각 — 디자인·광고·브랜딩",
+    when:({topTrack,topThemes,topDopa})=> (topTrack==="디자인·공예"?2:0)+(topThemes.includes("아름다움·감각")?1:0)+(topDopa==="인정"?2:0) },
+  { t:"종합대학 트랙 (인문·사회·경영·과학)", d:"미술 외 종합대학 진학까지 함께 여는 폭넓은 진로 설계",
+    when:({topGroup})=> (topGroup==="이공계"?2:0)+(topGroup==="인문"?2:0) },
+  { t:"진로 탐색 매니저 컨설팅", d:"아직 방향이 열려 있는 학생을 위한 1:1 진로 발견 상담",
+    when:({topGroup,topThemes})=> (topThemes.length===0?2:0)+1 }, // 항상 후보로 낮게 깔림
+  { t:"어학연수 플래너", d:"일본·미국 유학을 위한 어학·일정·학교 로드맵 설계",
+    when:({topThemes})=> (topThemes.includes("역사·문화")?2:0)+1 },
+  { t:"일본·미국 미대 유학 컨설팅", d:"기획→표현→사회 로드맵으로 진학 목표를 설계하는 1:1 상담",
+    when:()=> 1 }, // ESAD 시그니처, 항상 후보
+];
+
+/* 상위 추천 3~4개 + 그 외 전체를 분리해 반환 */
+function recommendPrograms(ctx){
+  const scored = PROGRAMS.map(p=>({ ...p, s:p.when(ctx) }));
+  const sorted = [...scored].sort((a,b)=> b.s - a.s);
+  const top = sorted.filter(p=>p.s>0).slice(0,4);
+  const topNames = new Set(top.map(p=>p.t));
+  // top이 3개 미만이면 채워 넣기
+  for(const p of sorted){ if(top.length>=3) break; if(!topNames.has(p.t)){ top.push(p); topNames.add(p.t); } }
+  const rest = PROGRAMS.filter(p=>!topNames.has(p.t));
+  return { top, rest };
 }
 
 export default function App(){
@@ -158,6 +168,32 @@ export default function App(){
 
   const recs = useMemo(()=>recommendPrograms({topGroup,topTrack,topDopa,topThemes}),
     [topGroup,topTrack,topDopa,topThemes]);
+
+  /* ── 학생이 선택한 내용 전체 요약 ── */
+  const selection = useMemo(()=>{
+    // 좋아하는 것: 성향별로 라벨 모으기
+    const likeLabels = [];
+    Object.keys(likes).forEach(k=>{
+      if(!likes[k]) return;
+      const [ax,idx] = k.split("__");
+      const arr = POOL_BY_AXIS[ax];
+      if(arr && arr[+idx]) likeLabels.push(arr[+idx]);
+    });
+    // 세부 과정
+    const detailLabels = Object.keys(details).filter(k=>details[k]).map(k=>k.split("::")[1]);
+    // 트랙
+    const trackLabels = Object.keys(tracks).filter(t=>tracks[t]);
+    // 상황 문항 답변 20개
+    const qAnswers = Q.map((q,qi)=>{
+      const ax = answers[qi];
+      if(!ax) return { q:q[0], a:null };
+      const opt = q[1].find(o=>o[1]===ax);
+      return { q:q[0], a:opt?opt[0]:null, ax };
+    });
+    // 만족 유형 점수
+    const dopaScores = DOPA.map(d=>({ key:d.key, v:dopa[d.key]||0, color:d.color }));
+    return { likeLabels, detailLabels, trackLabels, qAnswers, dopaScores };
+  },[likes,details,tracks,answers,dopa]);
 
   /* ── 레이더 ── */
   const radar = useMemo(()=>{
@@ -256,7 +292,7 @@ export default function App(){
         {step===7 && <StepDopa dopa={dopa} setDopa={setDopa} />}
         {step===8 &&
           <StepResult ref={resultRef} {...{profile,groupScores,radar,radarPath,scores,maxAxis,
-            topGroup,topTrack,topThemes,topDopa,recs,saveImage,saving}} />}
+            topGroup,topTrack,topThemes,topDopa,recs,selection,saveImage,saving}} />}
 
         {/* 네비 */}
         {step>0 &&
@@ -308,7 +344,7 @@ function Intro({profile,setProfile,onStart}){
       <p style={{margin:"14px 0 0",fontSize:14,fontWeight:700,lineHeight:1.7}}>
         좋아하는 것에는 대단한 힘이 숨어 있습니다.<br/>
         무엇을 좋아하고 어떻게 반응하는지 따라가면,<br/>
-        <b style={{color:CORAL}}>나만의 창작 프로필</b>이 보입니다. (약 3~5분)
+        <b style={{color:CORAL}}>나만의 진로 로드맵</b>이 보입니다. (약 3~5분)
       </p>
       <div style={{marginTop:22,display:"flex",flexDirection:"column",gap:10,maxWidth:320}}>
         <input placeholder="이름" value={profile.name} onChange={e=>setProfile({...profile,name:e.target.value})}
@@ -514,14 +550,57 @@ function StepDopa({dopa,setDopa}){
   </Card>;
 }
 
+/* 학생이 선택한 내용 상세 요약 */
+function SelectionSummary({selection,topThemes}){
+  const {likeLabels,detailLabels,trackLabels,qAnswers,dopaScores}=selection;
+  const Row=({label,children})=>(
+    <div style={{display:"flex",gap:10,padding:"8px 0",borderBottom:`1px solid ${SOFT}`}}>
+      <div style={{flexShrink:0,width:78,fontSize:11.5,fontWeight:800,color:NAVY}}>{label}</div>
+      <div style={{flex:1,fontSize:12,fontWeight:600,color:INK,lineHeight:1.6}}>{children}</div>
+    </div>
+  );
+  const dopaSorted=[...dopaScores].sort((a,b)=>b.v-a.v);
+  return (
+    <div style={{marginTop:20,border:`1.5px solid ${LINE}`,borderRadius:14,padding:"16px 18px"}}>
+      <div style={{fontSize:14,fontWeight:900,color:NAVY,marginBottom:8}}>내가 선택한 것</div>
+      <Row label="좋아하는 것">{likeLabels.length? likeLabels.join(", ") : "선택 없음"}</Row>
+      <Row label="관심 트랙">{trackLabels.length? trackLabels.join(", ") : "선택 없음"}</Row>
+      <Row label="세부 과정">{detailLabels.length? detailLabels.join(", ") : "선택 없음"}</Row>
+      <Row label="끌리는 주제">{topThemes.length? topThemes.join(", ") : "선택 없음"}</Row>
+      <Row label="만족 유형">
+        {dopaSorted.filter(d=>d.v>0).length
+          ? dopaSorted.filter(d=>d.v>0).map((d,i)=>(
+              <span key={d.key} style={{color:d.color,fontWeight:800}}>
+                {d.key}({d.v}){i<dopaSorted.filter(x=>x.v>0).length-1?" · ":""}
+              </span>))
+          : "선택 없음"}
+      </Row>
+      {/* 상황 문항 20개 답변 */}
+      <div style={{fontSize:12.5,fontWeight:800,color:NAVY,margin:"14px 0 6px"}}>상황 문항 답변 (20)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:4}}>
+        {qAnswers.map((qa,i)=>(
+          <div key={i} style={{display:"flex",gap:8,fontSize:11,lineHeight:1.5}}>
+            <span style={{flexShrink:0,width:18,height:18,borderRadius:"50%",background:qa.a?NAVY:"#c9cede",
+              color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+            <span style={{flex:1,color:"#6b7285",fontWeight:600}}>{qa.q}</span>
+            <span style={{flexShrink:0,maxWidth:"42%",fontWeight:800,
+              color:qa.ax?(AX[qa.ax]?.color||INK):MUTED,textAlign:"right"}}>
+              {qa.a||"미응답"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const StepResult = React.forwardRef(function StepResult(
-  {profile,groupScores,radar,radarPath,scores,maxAxis,topGroup,topTrack,topThemes,topDopa,recs,saveImage,saving},ref){
+  {profile,groupScores,radar,radarPath,scores,maxAxis,topGroup,topTrack,topThemes,topDopa,recs,selection,saveImage,saving},ref){
   return <div>
     <Card ref={ref}>
       <div style={{textAlign:"center",marginBottom:18}}>
         <div style={{fontSize:12,fontWeight:800,letterSpacing:1.2,color:NAVY}}>CREATIVE MIND MAP · RESULT</div>
         <h2 style={{margin:"6px 0 0",fontSize:24,fontWeight:900,color:NAVY}}>
-          {profile.name||"나"}의 창작 프로필
+          {profile.name||"나"}의 진로 로드맵
         </h2>
       </div>
 
@@ -548,16 +627,53 @@ const StepResult = React.forwardRef(function StepResult(
         {topDopa? <><b style={{color:GOLD}}>{topDopa}</b>의 순간에 가장 큰 만족을 느낀다.</> : "나만의 만족을 찾아가는 중이다."}
       </div>
 
+      {/* 내가 선택한 것 (상세 요약) */}
+      {selection && <SelectionSummary selection={selection} topThemes={topThemes}/>}
+
       {/* ESAD 추천 */}
-      <div style={{marginTop:20}}>
-        <div style={{fontSize:14,fontWeight:900,color:NAVY,marginBottom:10}}>나에게 맞는 ESAD 프로그램</div>
+      <div style={{marginTop:22}}>
+        <div style={{fontSize:15,fontWeight:900,color:NAVY,marginBottom:4}}>나에게 맞는 ESAD 프로그램 선택하기</div>
+        <div style={{fontSize:11.5,color:"#8891a8",fontWeight:600,marginBottom:12,lineHeight:1.5}}>
+          진단 결과에 맞춰 우선 추천되는 트랙입니다. 관심 가는 트랙을 상담에서 함께 정해요.
+        </div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {recs.map((r,i)=>(
-            <div key={i} style={{border:`1.5px solid ${LINE}`,borderRadius:12,padding:"12px 14px"}}>
-              <div style={{fontSize:14,fontWeight:800,color:NAVY}}>{r.t}</div>
+          {recs.top.map((r,i)=>(
+            <div key={i} style={{border:`2px solid ${CORAL}`,background:`${CORAL}0d`,borderRadius:12,padding:"12px 14px"}}>
+              <div style={{fontSize:14,fontWeight:800,color:NAVY,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:10,fontWeight:800,color:"#fff",background:CORAL,borderRadius:6,padding:"2px 7px"}}>추천</span>
+                {r.t}
+              </div>
               <div style={{fontSize:12,color:"#6b7285",fontWeight:600,marginTop:3}}>{r.d}</div>
             </div>
           ))}
+        </div>
+
+        {recs.rest.length>0 && <>
+          <div style={{fontSize:12.5,fontWeight:800,color:MUTED,margin:"16px 0 8px"}}>그 외 ESAD 트랙</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {recs.rest.map((r,i)=>(
+              <div key={i} style={{border:`1.5px solid ${LINE}`,borderRadius:10,padding:"10px 13px"}}>
+                <div style={{fontSize:13,fontWeight:800,color:NAVY}}>{r.t}</div>
+                <div style={{fontSize:11.5,color:"#8891a8",fontWeight:600,marginTop:2}}>{r.d}</div>
+              </div>
+            ))}
+          </div>
+        </>}
+
+        <div style={{fontSize:11,color:"#8891a8",fontWeight:600,lineHeight:1.6,marginTop:12,
+          background:SOFT,borderRadius:10,padding:"11px 13px"}}>
+          * 에사드 글로벌은 학생의 진로 탐색을 이끌어내는 상담형 수업과 함께, 다양한 학교·진로에 대한 정보를 제공합니다.
+        </div>
+      </div>
+
+      {/* 다음 단계 예고 */}
+      <div style={{marginTop:18,border:`2px dashed ${NAVY}`,borderRadius:14,padding:"16px 18px",
+        background:`${NAVY}08`}}>
+        <div style={{fontSize:13,fontWeight:900,color:NAVY,marginBottom:5}}>다음 단계 · 심화 진단</div>
+        <div style={{fontSize:12.5,color:INK,fontWeight:600,lineHeight:1.65}}>
+          트랙이 정해지면, 학생의 <b style={{color:CORAL}}>행동력 성향</b>을 더 깊이 들여다보는 문항이 이어집니다.
+          무엇이 나를 움직이게 하는지 — <b style={{color:GOLD}}>인정욕구</b>와 <b style={{color:TEAL}}>만족감</b>을
+          세밀하게 체크하는 별도 진단을 통해, 나만의 진로 로드맵을 완성해 갑니다.
         </div>
       </div>
     </Card>
@@ -578,9 +694,11 @@ const StepResult = React.forwardRef(function StepResult(
       </button>
     </div>
     <div style={{textAlign:"center",marginTop:16}}>
-      <a href="https://instagram.com/h_esad_art_studio" target="_blank" rel="noreferrer"
-        style={{fontSize:13,fontWeight:800,color:CORAL,textDecoration:"none"}}>
-        → ESAD 상담 예약하고 더 알아보기
+      <a href="https://naver.me/xPvfTBJn" target="_blank" rel="noreferrer"
+        style={{display:"inline-block",background:CORAL,color:"#fff",fontSize:15,fontWeight:800,
+          textDecoration:"none",borderRadius:999,padding:"14px 34px",
+          boxShadow:"0 6px 18px rgba(217,136,132,.35)"}}>
+        ESAD 상담 신청하기 →
       </a>
     </div>
   </div>;
